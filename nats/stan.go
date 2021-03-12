@@ -44,7 +44,6 @@ type QueueSuber interface {
 
 // StanClient 訂閱方
 type StanClient struct {
-	base pubsub.TracePubSub
 	*config
 	conn          stan.Conn
 	handlerQueues []HandlerQueue
@@ -131,12 +130,12 @@ func (sc *StanClient) Pub(ctx context.Context, topic string, message []byte) err
 		//todo print error
 	}
 
-	return sc.conn.Publish(topic, sc.base.Pub(ctx, topic, b)())
+	return sc.conn.Publish(topic, sc.tracer.Pub(ctx, topic, b)())
 }
 
 func (sc *StanClient) Sub(ctx context.Context, topic string, handler pubsub.SubHandler) {
 	_, err := sc.conn.Subscribe(topic, func(msg *stan.Msg) {
-		sc.base.Sub(ctx, topic, handler, msg.Data)
+		sc.tracer.Sub(ctx, topic, handler, msg.Data)
 
 	})
 	if err != nil {
@@ -150,9 +149,10 @@ func (sc *StanClient) QueueSub(ctx context.Context) {
 			handler.Subject,
 			handler.Group,
 			func(msg *stan.Msg) {
-				sc.base.Sub(ctx, handler.Subject, handler.Handler, msg.Data)
+				sc.tracer.Sub(ctx, handler.Subject, handler.Handler, msg.Data)
 			})
 		if err != nil {
+			fmt.Println(err)
 			//todo print error
 		}
 	}
@@ -164,3 +164,4 @@ func (sc *StanClient) DrainCon() {
 		//todo print error
 	}
 }
+
