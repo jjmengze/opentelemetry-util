@@ -9,6 +9,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/stan.go"
 	"opentelemetry-util/pubsub"
+	"github.com/rs/zerolog/log"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func WithTracer(tracer pubsub.TracePubSub) Options {
 
 func WithLogger() Options {
 	return func(c *config) {
-		//todo
+		//todo maybe we can add log interface,Easier to replace the log system
 	}
 }
 
@@ -53,6 +54,7 @@ type HandlerQueue struct {
 	Subject string
 	Group   string
 	Handler pubsub.SubHandler
+	Options []stan.SubscriptionOption
 }
 
 func NewStanClient(clusterID, clientID, appID string, natsClient *NatsClient) *StanClient {
@@ -66,7 +68,7 @@ func NewStanClientWithOption(clusterID, clientID, appID string, natsClient *Nats
 	}
 	con, err := NewStanConn(clusterID, clientID, appID, natsClient.conn, c.stanOption...)
 	if err != nil {
-		//todo print err log
+		log.Warn().Msgf("New stan connection error :%v", err.Error())
 	}
 	return &StanClient{
 		conn:   con,
@@ -85,8 +87,7 @@ func NewStanConn(clusterID, clientID, appID string, natsCon *nats.Conn, opt ...s
 		stan.NatsConn(natsCon),
 		stan.Pings(10, 5),
 		stan.SetConnectionLostHandler(func(_ stan.Conn, reason error) {
-			//todo print lose connection log
-			//log.Error().Msgf("Connection lost, reason: %v", reason)
+			log.Warn().Msgf("stan client connect stan lose  connection  :%v", reason.Error())
 		}),
 	)
 
@@ -110,8 +111,7 @@ func NewStanConn(clusterID, clientID, appID string, natsCon *nats.Conn, opt ...s
 		con, err = stan.Connect(clusterID, clientID, natsOpt...)
 
 		if err != nil {
-			//log.Error().Msgf("fail to connect to stan: %s, clusterID: %v, clientID: %v", err.Error(), c.ClusterID, c.ClientID)
-			//todo print stan connect error log
+			log.Warn().Msgf("stan client connect stan server %v cluster id client id %v  error :%v", clientID, clientID, err.Error())
 			return err
 		}
 
@@ -127,19 +127,22 @@ func (sc *StanClient) RegisterHandlerHandlerQueueGroup(handlerQueues []HandlerQu
 func (sc *StanClient) Pub(ctx context.Context, topic string, message []byte) error {
 	b, err := json.Marshal(message)
 	if err != nil {
-		//todo print error
+		log.Warn().Msgf("stan publish marshal data %v error :%v", string(message), err.Error())
 	}
-
-	return sc.conn.Publish(topic, sc.tracer.Pub(ctx, topic, b)())
+	err = sc.conn.Publish(topic, sc.tracer.Pub(ctx, topic, b)())
+	if err != nil {
+		log.Warn().Msgf("stan client publish %v topic occurred error :%v", topic, err.Error())
+	}
+	return err
 }
 
 func (sc *StanClient) Sub(ctx context.Context, topic string, handler pubsub.SubHandler) {
+
 	_, err := sc.conn.Subscribe(topic, func(msg *stan.Msg) {
 		sc.tracer.Sub(ctx, topic, handler, msg.Data)
-
 	})
 	if err != nil {
-		//todo print error
+		log.Warn().Msgf("stan client sub %v topic occurred error :%v", topic, err.Error())
 	}
 }
 
@@ -150,10 +153,11 @@ func (sc *StanClient) QueueSub(ctx context.Context) {
 			handler.Group,
 			func(msg *stan.Msg) {
 				sc.tracer.Sub(ctx, handler.Subject, handler.Handler, msg.Data)
-			})
+			},
+			handler.Options...,
+		)
 		if err != nil {
-			fmt.Println(err)
-			//todo print error
+			log.Warn().Msgf("stan client queue subscribe %v topic %v group error :%v", handler.Subject, handler.Subject, err.Error())
 		}
 	}
 }
@@ -161,7 +165,6 @@ func (sc *StanClient) QueueSub(ctx context.Context) {
 func (sc *StanClient) DrainCon() {
 	err := sc.conn.NatsConn().Drain()
 	if err != nil {
-		//todo print error
+		log.Warn().Msgf("stan client drain connect error :%v", err.Error())
 	}
 }
-

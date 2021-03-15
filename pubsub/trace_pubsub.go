@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/nats-io/stan.go"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
@@ -26,6 +27,10 @@ type TracePubSub interface {
 type pubSub struct {
 }
 
+func NewPubSub() TracePubSub {
+	return &pubSub{}
+}
+
 type PubHandler func() []byte
 
 type MsgMeta struct {
@@ -36,16 +41,17 @@ type MsgMeta struct {
 func (ps *pubSub) Pub(ctx context.Context, topic string, message []byte) PubHandler {
 	return func() []byte {
 		data := &MsgMeta{}
+		data.Header = make(map[string][]string)
 		b, err := json.Marshal(message)
 		if err != nil {
-			//todo err log
+			log.Warn().Msgf("Publish marshal data %v error :%v", data, err.Error())
 		}
 		data.Data = b
 		otel.GetTextMapPropagator().Inject(ctx, data)
 
 		passB, err := json.Marshal(data)
 		if err != nil {
-			//todo err log
+			log.Warn().Msgf("Publish marshal data %v error :%v", data, err.Error())
 		}
 		_, span := opentelemetry.StartSpan(ctx, "Publish:"+topic, trace.WithSpanKind(trace.SpanKindProducer))
 		defer span.End()
@@ -57,7 +63,7 @@ func (ps *pubSub) Sub(ctx context.Context, topic string, handler SubHandler, dat
 	msgMeta := &MsgMeta{}
 	err := json.Unmarshal(data, msgMeta)
 	if err != nil {
-		//todo err log
+		log.Warn().Msgf("Sub unmarshal data %v error :%v", data, err.Error())
 	}
 	spanCtx := otel.GetTextMapPropagator().Extract(ctx, msgMeta)
 	spanCtx, span := opentelemetry.StartSpan(spanCtx, "Subscribe:"+topic, trace.WithSpanKind(trace.SpanKindConsumer))
