@@ -6,8 +6,8 @@ import (
 	"github.com/nats-io/stan.go"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
 	opentelemetry "opentelemetry-util"
 )
 
@@ -35,13 +35,13 @@ type PubHandler func() []byte
 
 type MsgMeta struct {
 	stan.Msg
-	http.Header
+	propagation.HeaderCarrier
 }
 
 func (ps *pubSub) Pub(ctx context.Context, topic string, message []byte) PubHandler {
 	return func() []byte {
 		data := &MsgMeta{}
-		data.Header = make(map[string][]string)
+		data.HeaderCarrier = make(map[string][]string)
 		b, err := json.Marshal(message)
 		if err != nil {
 			log.Warn().Msgf("Publish marshal data %v error :%v", data, err.Error())

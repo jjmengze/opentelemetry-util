@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -50,7 +50,7 @@ func (rt *traceRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) 
 	span := trace.SpanFromContext(r.Context())
 	if r.ContentLength > 0 {
 		b, _ := ioutil.ReadAll(r.Body)
-		span.SetAttributes(label.String("http.req_body", string(b)))
+		span.SetAttributes(attribute.String("http.req_body", string(b)))
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 	}
 	resp, err := rt.Transport.RoundTrip(r)
@@ -59,7 +59,7 @@ func (rt *traceRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) 
 	}
 	if resp.ContentLength > 0 {
 		b, _ := ioutil.ReadAll(resp.Body)
-		span.SetAttributes(label.String("http.resp_body", string(b)))
+		span.SetAttributes(attribute.String("http.resp_body", string(b)))
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 	}
 	return resp, err
@@ -73,14 +73,14 @@ func (th *traceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	span := trace.SpanFromContext(r.Context())
 	if r.ContentLength > 0 {
 		b, _ := ioutil.ReadAll(r.Body)
-		span.SetAttributes(label.String("http.req_body", string(b)))
+		span.SetAttributes(attribute.String("http.req_body", string(b)))
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
 	}
 	tw := NewtraceResponseWriter(w)
 	th.Handler.ServeHTTP(tw, r)
 	respStr := tw.Body.String()
 	if respStr != "" {
-		span.SetAttributes(label.String("http.resp_body", respStr))
+		span.SetAttributes(attribute.String("http.resp_body", respStr))
 	}
 }
 
