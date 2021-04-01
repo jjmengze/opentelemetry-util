@@ -6,7 +6,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/trace/jaeger"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/semconv"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -20,10 +22,13 @@ func RegisterTraceExporter(endpoint, serviceName string, isEnable bool) (flush f
 	tp, flush, err := jaeger.NewExportPipeline(
 		jaeger.WithAgentEndpoint(endpoint), //for udp
 		//jaeger.WithCollectorEndpoint("http://localhost:14268/api/traces"), for tcp
-		jaeger.WithProcess(jaeger.Process{
-			ServiceName: serviceName,
-		}),
-		jaeger.WithSDK(&sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
+		jaeger.WithProcessFromEnv(),
+		jaeger.WithSDKOptions(
+			sdktrace.WithSampler(sdktrace.AlwaysSample()),
+			sdktrace.WithResource(resource.NewWithAttributes(
+				semconv.ServiceNameKey.String(serviceName),
+			)),
+		),
 	)
 	if err != nil {
 		//log.Errorf("Failed to create the Open telemetry exporter: %v", err)
@@ -48,4 +53,3 @@ func StartSpan(ctx context.Context, spName string, opts ...trace.SpanOption) (co
 		opts...,
 	)
 }
-
